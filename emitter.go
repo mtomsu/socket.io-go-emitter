@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/garyburd/redigo/redis"
 	"github.com/vmihailenco/msgpack"
+	"log"
 	"strconv"
 )
 
@@ -138,6 +139,8 @@ func (emitter *Emitter) Emit(event string, data ...interface{}) (*Emitter, error
 	d = append(d, data...)
 	eventType := EVENT
 	emitter.LastType = eventType
+
+	log.Println("#########", eventType)
 	if HasBinary(data...) {
 		eventType = BINARY_EVENT
 	}
@@ -226,6 +229,8 @@ func (emitter *Emitter) emit(packet map[string]interface{}) (*Emitter, error) {
 	}
 
 	emitter.LastChannel = channel
+
+	log.Println("#########", channel)
 
 	//emitter.Redis.Do("PUBLISH", emitter.Key, buf)
 	emitter.Redis.Do("PUBLISH", channel, buf)
