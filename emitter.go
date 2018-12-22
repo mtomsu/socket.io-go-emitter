@@ -32,7 +32,7 @@ type Emitter struct {
 	Namespace   string
 	Channel     string
 	LastChannel string
-	LastType    int
+	LastType    string
 	rooms       []string
 	flags       map[string]interface{}
 }
