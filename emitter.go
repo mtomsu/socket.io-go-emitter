@@ -2,6 +2,7 @@ package SocketIO
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/garyburd/redigo/redis"
 	"github.com/vmihailenco/msgpack"
 	"strconv"
@@ -26,10 +27,12 @@ type EmitterOpts struct {
 }
 
 type Emitter struct {
-	Redis redis.Conn
-	Key   string
-	rooms []string
-	flags map[string]interface{}
+	Redis     redis.Conn
+	Prefix    string
+	Namespace string
+	Channel   string
+	rooms     []string
+	flags     map[string]interface{}
 }
 
 // Emitter constructor
@@ -58,16 +61,25 @@ func NewEmitter(opts *EmitterOpts) (*Emitter, error) {
 		return nil, err
 	}
 
-	var key string
+	var prefix string
 	if opts.Key == "" {
-		key = "socket.io#emitter"
+		prefix = "socket.io"
 	} else {
-		key = opts.Key + "#emitter"
+		prefix = opts.Key
 	}
 
+	// Default namespace.
+	nsp := "/"
+
+	// Build channel name compatible with: https://github.com/socketio/socket.io-emitter
+	delimiter := "#"
+	channel := fmt.Sprintf("%s%s%s%s", prefix, delimiter, nsp, delimiter)
+
 	emitter := &Emitter{
-		Redis: conn,
-		Key:   key,
+		Redis:     conn,
+		Prefix:    prefix,
+		Namespace: nsp,
+		Channel:   channel,
 	}
 	return emitter, nil
 }
@@ -178,7 +190,17 @@ func HasBinary(dataSlice ...interface{}) bool {
 }
 
 func (emitter *Emitter) emit(packet map[string]interface{}) (*Emitter, error) {
+
+	// Channel delimiter.
+	delimiter := "#"
+
+	// Use channel w/ default namespace.
+	channel := emitter.Channel
+
 	if emitter.flags["nsp"] != nil {
+		// Update nsp in channel.
+		channel = fmt.Sprintf("%s%s%s%s", emitter.Prefix, delimiter, emitter.flags["nsp"], delimiter)
+
 		packet["nsp"] = emitter.flags["nsp"]
 		delete(emitter.flags, "nsp")
 	}
@@ -194,7 +216,14 @@ func (emitter *Emitter) emit(packet map[string]interface{}) (*Emitter, error) {
 	if error != nil {
 		return nil, error
 	}
-	emitter.Redis.Do("PUBLISH", emitter.Key, buf)
+
+	// Add room to channel.
+	if len(emitter.rooms) == 1 {
+		channel = fmt.Sprintf("%s%s%s", channel, emitter.rooms[0], "#")
+	}
+
+	//emitter.Redis.Do("PUBLISH", emitter.Key, buf)
+	emitter.Redis.Do("PUBLISH", channel, buf)
 	emitter.rooms = []string{}
 	emitter.flags = make(map[string]interface{})
 	return emitter, nil

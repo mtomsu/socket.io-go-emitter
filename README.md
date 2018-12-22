@@ -5,6 +5,8 @@ socket.io-go-emitter
 
 A Golang implementation of [socket.io-emitter](https://github.com/Automattic/socket.io-emitter)
 
+This project was forked to make the Redis PUBLISH channel compatible with the Node.js implementation of the Socket.IO Redis adapter: [socket.io-redis](https://github.com/socketio/socket.io-redis).
+
 This project uses redis.
 Make sure your environment has redis.
 
