@@ -27,12 +27,14 @@ type EmitterOpts struct {
 }
 
 type Emitter struct {
-	Redis     redis.Conn
-	Prefix    string
-	Namespace string
-	Channel   string
-	rooms     []string
-	flags     map[string]interface{}
+	Redis       redis.Conn
+	Prefix      string
+	Namespace   string
+	Channel     string
+	LastChannel string
+	LastType    int
+	rooms       []string
+	flags       map[string]interface{}
 }
 
 // Emitter constructor
@@ -135,6 +137,7 @@ func (emitter *Emitter) Emit(event string, data ...interface{}) (*Emitter, error
 	d := []interface{}{event}
 	d = append(d, data...)
 	eventType := EVENT
+	emitter.LastType = eventType
 	if HasBinary(data...) {
 		eventType = BINARY_EVENT
 	}
@@ -222,8 +225,7 @@ func (emitter *Emitter) emit(packet map[string]interface{}) (*Emitter, error) {
 		channel = fmt.Sprintf("%s%s%s", channel, emitter.rooms[0], "#")
 	}
 
-	fmt.Println("packet:", packet)
-	fmt.Println("PUBLISH to:", channel)
+	emitter.LastChannel = channel
 
 	//emitter.Redis.Do("PUBLISH", emitter.Key, buf)
 	emitter.Redis.Do("PUBLISH", channel, buf)
