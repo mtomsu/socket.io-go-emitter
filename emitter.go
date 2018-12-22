@@ -222,6 +222,9 @@ func (emitter *Emitter) emit(packet map[string]interface{}) (*Emitter, error) {
 		channel = fmt.Sprintf("%s%s%s", channel, emitter.rooms[0], "#")
 	}
 
+	fmt.Println("packet:", packet)
+	fmt.Println("PUBLISH to:", channel)
+
 	//emitter.Redis.Do("PUBLISH", emitter.Key, buf)
 	emitter.Redis.Do("PUBLISH", channel, buf)
 	emitter.rooms = []string{}
