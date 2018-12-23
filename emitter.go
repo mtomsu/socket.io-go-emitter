@@ -27,14 +27,12 @@ type EmitterOpts struct {
 }
 
 type Emitter struct {
-	Redis       redis.Conn
-	Prefix      string
-	Namespace   string
-	Channel     string
-	LastChannel string
-	LastType    string
-	rooms       []string
-	flags       map[string]interface{}
+	Redis     redis.Conn
+	Prefix    string
+	Namespace string
+	Channel   string
+	rooms     []string
+	flags     map[string]interface{}
 }
 
 // Emitter constructor
@@ -126,7 +124,7 @@ func (emitter *Emitter) To(room string) *Emitter {
  * @param {String} namespace
  */
 func (emitter *Emitter) Of(namespace string) *Emitter {
-	emitter.flags["nsp"] = namespace
+	emitter.Namespace = namespace
 	return emitter
 }
 
@@ -134,18 +132,23 @@ func (emitter *Emitter) Of(namespace string) *Emitter {
 // Usage:
 // Emit("event name", "data")
 func (emitter *Emitter) Emit(event string, data ...interface{}) (*Emitter, error) {
+	// Build data from args.
 	d := []interface{}{event}
 	d = append(d, data...)
-	eventType := EVENT
-	emitter.LastType = strconv.Itoa(eventType)
 
+	// Determine event type.
+	eventType := EVENT
 	if HasBinary(data...) {
 		eventType = BINARY_EVENT
 	}
+
+	// Build packet.
 	packet := map[string]interface{}{
 		"type": eventType,
 		"data": d,
+		"nsp":  emitter.Namespace,
 	}
+
 	return emitter.emit(packet)
 }
 
@@ -153,11 +156,15 @@ func (emitter *Emitter) Emit(event string, data ...interface{}) (*Emitter, error
 // Usage:
 // EmitBinary("event name", []byte{0x01, 0x02, 0x03})
 func (emitter *Emitter) EmitBinary(event string, data ...interface{}) (*Emitter, error) {
+	// Build data from args.
 	d := []interface{}{event}
 	d = append(d, data...)
+
+	// Build packet.
 	packet := map[string]interface{}{
 		"type": BINARY_EVENT,
 		"data": d,
+		"nsp":  emitter.Namespace,
 	}
 	return emitter.emit(packet)
 }
@@ -198,40 +205,46 @@ func (emitter *Emitter) emit(packet map[string]interface{}) (*Emitter, error) {
 	// Channel delimiter.
 	delimiter := "#"
 
-	// Use channel w/ default namespace.
-	channel := emitter.Channel
-
-	if emitter.flags["nsp"] != nil {
-		// Update nsp in channel.
-		channel = fmt.Sprintf("%s%s%s%s", emitter.Prefix, delimiter, emitter.flags["nsp"], delimiter)
-
-		packet["nsp"] = emitter.flags["nsp"]
-		delete(emitter.flags, "nsp")
-	}
-	var pack []interface{} = make([]interface{}, 0)
-	pack = append(pack, packet)
-	pack = append(pack, map[string]interface{}{
-		"rooms": emitter.rooms,
-		"flags": emitter.flags,
-	})
-	buf := &bytes.Buffer{}
-	enc := msgpack.NewEncoder(buf)
-	error := enc.Encode(pack)
-	if error != nil {
-		return nil, error
-	}
+	// Build current channel name.
+	channel := fmt.Sprintf("%s%s%s%s", emitter.Prefix, delimiter, emitter.Namespace, delimiter)
 
 	// Add room to channel.
 	if len(emitter.rooms) == 1 {
 		channel = fmt.Sprintf("%s%s%s", channel, emitter.rooms[0], "#")
 	}
 
-	emitter.LastChannel = channel
+	// Build packet.
+	var pack []interface{} = make([]interface{}, 0)
 
-	//emitter.Redis.Do("PUBLISH", emitter.Key, buf)
+	// Add UID to packet.
+	pack = append(pack, "emitter")
+
+	// Add packet data.
+	pack = append(pack, packet)
+
+	// Add options.
+	pack = append(pack, map[string]interface{}{
+		"rooms": emitter.rooms,
+		"flags": emitter.flags,
+	})
+
+	// Encode.
+	buf := &bytes.Buffer{}
+	enc := msgpack.NewEncoder(buf)
+	error := enc.Encode(pack)
+
+	// Handle encoder error.
+	if error != nil {
+		return nil, error
+	}
+
+	// Publish to Redis.
 	emitter.Redis.Do("PUBLISH", channel, buf)
+
+	// Reset state.
 	emitter.rooms = []string{}
 	emitter.flags = make(map[string]interface{})
+
 	return emitter, nil
 }
 
